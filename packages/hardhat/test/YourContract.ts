@@ -3,26 +3,33 @@ import { ethers } from "hardhat";
 import { YourContract } from "../typechain-types";
 
 describe("YourContract", function () {
-  // We define a fixture to reuse the same setup in every test.
-
   let yourContract: YourContract;
+
   before(async () => {
-    const [owner] = await ethers.getSigners();
     const yourContractFactory = await ethers.getContractFactory("YourContract");
-    yourContract = (await yourContractFactory.deploy(owner.address)) as YourContract;
+    yourContract = (await yourContractFactory.deploy()) as YourContract;
     await yourContract.waitForDeployment();
   });
 
-  describe("Deployment", function () {
-    it("Should have the right message on deploy", async function () {
-      expect(await yourContract.greeting()).to.equal("Building Unstoppable Apps!!!");
+  describe("addTask", function () {
+    it("Should add a task successfully", async function () {
+      await yourContract.addTask("Сделать домашнее задание");
+      const count = await yourContract.getTaskCount();
+      expect(count).to.equal(1n);
     });
+  });
 
-    it("Should allow setting a new message", async function () {
-      const newGreeting = "Learn Scaffold-ETH 2! :)";
+  describe("TaskAdded event", function () {
+    it("Should emit TaskAdded event", async function () {
+      await expect(yourContract.addTask("Купить продукты"))
+        .to.emit(yourContract, "TaskAdded")
+        .withArgs(1n, "Купить продукты");
+    });
+  });
 
-      await yourContract.setGreeting(newGreeting);
-      expect(await yourContract.greeting()).to.equal(newGreeting);
+  describe("require check", function () {
+    it("Should revert when title is empty", async function () {
+      await expect(yourContract.addTask("")).to.be.revertedWith("Title cannot be empty");
     });
   });
 });

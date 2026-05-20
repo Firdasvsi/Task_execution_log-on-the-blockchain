@@ -27,7 +27,7 @@ const config: HardhatUserConfig = {
   solidity: {
     compilers: [
       {
-        version: "0.8.30",
+        version: "0.8.20",
         settings: {
           optimizer: {
             enabled: true,
@@ -49,10 +49,8 @@ const config: HardhatUserConfig = {
     // View the networks that are pre-configured.
     // If the network you are looking for is not here you can add new network settings
     hardhat: {
-      forking: {
-        url: `https://eth-mainnet.alchemyapi.io/v2/${providerApiKey}`,
-        enabled: process.env.MAINNET_FORKING_ENABLED === "true",
-      },
+      gas: 6000000,
+      blockGasLimit: 6000000,
     },
     mainnet: {
       url: "https://mainnet.rpc.buidlguidl.com",
