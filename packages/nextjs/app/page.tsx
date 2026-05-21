@@ -1,72 +1,127 @@
 "use client";
 
-import Link from "next/link";
-import { Address } from "@scaffold-ui/components";
+import { useState } from "react";
 import type { NextPage } from "next";
 import { useAccount } from "wagmi";
-import { BugAntIcon, MagnifyingGlassIcon } from "@heroicons/react/24/outline";
-import { useTargetNetwork } from "~~/hooks/scaffold-eth";
+import { useScaffoldReadContract, useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
 
 const Home: NextPage = () => {
   const { address: connectedAddress } = useAccount();
-  const { targetNetwork } = useTargetNetwork();
+  const [newTask, setNewTask] = useState("");
+  const [isAdding, setIsAdding] = useState(false);
+  const [txStatus, setTxStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
+
+  const { data: taskCount } = useScaffoldReadContract({
+    contractName: "YourContract",
+    functionName: "getTaskCount",
+  });
+
+  const { writeContractAsync } = useScaffoldWriteContract({
+    contractName: "YourContract",
+  });
+
+  const handleAddTask = async () => {
+    if (!newTask.trim()) return;
+    setTxStatus("loading");
+    try {
+      await writeContractAsync({
+        functionName: "addTask",
+        args: [newTask],
+      });
+      setNewTask("");
+      setTxStatus("success");
+    } catch (e) {
+      setTxStatus("error");
+    } finally {
+      setIsAdding(false);
+    }
+  };
+
+  const handleToggle = async (index: number) => {
+    setTxStatus("loading");
+    try {
+      await writeContractAsync({
+        functionName: "toggleTask",
+        args: [BigInt(index)],
+      });
+      setTxStatus("success");
+    } catch (e) {
+      setTxStatus("error");
+    }
+  };
+
+  const count = taskCount ? Number(taskCount) : 0;
 
   return (
-    <>
-      <div className="flex items-center flex-col grow pt-10">
-        <div className="px-5">
-          <h1 className="text-center">
-            <span className="block text-2xl mb-2">Welcome to</span>
-            <span className="block text-4xl font-bold">Scaffold-ETH 2</span>
-          </h1>
-          <div className="flex justify-center items-center space-x-2 flex-col">
-            <p className="my-2 font-medium">Connected Address:</p>
-            <Address address={connectedAddress} chain={targetNetwork} />
-          </div>
-          <p className="text-center text-lg">
-            Get started by editing{" "}
-            <code className="italic bg-base-300 text-base font-bold max-w-full break-words break-all inline-block">
-              packages/nextjs/app/page.tsx
-            </code>
-          </p>
-          <p className="text-center text-lg">
-            Edit your smart contract{" "}
-            <code className="italic bg-base-300 text-base font-bold max-w-full break-words break-all inline-block">
-              YourContract.sol
-            </code>{" "}
-            in{" "}
-            <code className="italic bg-base-300 text-base font-bold max-w-full break-words break-all inline-block">
-              packages/hardhat/contracts
-            </code>
-          </p>
+    <div className="flex items-center flex-col grow pt-10">
+      <div className="px-5 w-full max-w-2xl">
+        <h1 className="text-center text-4xl font-bold mb-2">Журнал задач</h1>
+        <p className="text-center mb-6 text-gray-500">Кошелёк: {connectedAddress ?? "не подключён"}</p>
+
+        <div className="bg-base-200 rounded-2xl p-4 mb-6 text-center">
+          <span className="text-2xl font-bold">{count}</span>
+          <span className="ml-2 text-gray-500">задач всего</span>
         </div>
 
-        <div className="grow bg-base-300 w-full mt-16 px-8 py-12">
-          <div className="flex justify-center items-center gap-12 flex-col md:flex-row">
-            <div className="flex flex-col bg-base-100 px-10 py-10 text-center items-center max-w-xs rounded-3xl">
-              <BugAntIcon className="h-8 w-8 fill-secondary" />
-              <p>
-                Tinker with your smart contract using the{" "}
-                <Link href="/debug" passHref className="link">
-                  Debug Contracts
-                </Link>{" "}
-                tab.
-              </p>
-            </div>
-            <div className="flex flex-col bg-base-100 px-10 py-10 text-center items-center max-w-xs rounded-3xl">
-              <MagnifyingGlassIcon className="h-8 w-8 fill-secondary" />
-              <p>
-                Explore your local transactions with the{" "}
-                <Link href="/blockexplorer" passHref className="link">
-                  Block Explorer
-                </Link>{" "}
-                tab.
-              </p>
-            </div>
-          </div>
+        {txStatus === "loading" && <div className="alert alert-info mb-4">⏳ Транзакция отправляется...</div>}
+        {txStatus === "success" && <div className="alert alert-success mb-4">✅ Транзакция прошла успешно!</div>}
+        {txStatus === "error" && <div className="alert alert-error mb-4">❌ Ошибка транзакции</div>}
+
+        <div className="flex gap-2 mb-8">
+          <input
+            className="input input-bordered flex-1"
+            placeholder="Введите название задачи..."
+            value={newTask}
+            onChange={e => setNewTask(e.target.value)}
+          />
+          <button className="btn btn-primary" onClick={handleAddTask} disabled={isAdding}>
+            Добавить
+          </button>
         </div>
+
+        <TaskList count={count} onToggle={handleToggle} />
       </div>
-    </>
+    </div>
+  );
+};
+
+const TaskItem = ({ index, onToggle }: { index: number; onToggle: (index: number) => void }) => {
+  const { data } = useScaffoldReadContract({
+    contractName: "YourContract",
+    functionName: "getTask",
+    args: [BigInt(index)],
+  });
+
+  if (!data) return null;
+
+  const [title, completed] = data;
+
+  return (
+    <div
+      className={`flex items-center justify-between p-4 rounded-xl mb-3 ${completed ? "bg-success/20" : "bg-base-200"}`}
+    >
+      <div className="flex items-center gap-3">
+        <span className="text-xl">{completed ? "✅" : "⬜"}</span>
+        <span className={completed ? "line-through text-gray-400" : ""}>{title}</span>
+      </div>
+      <button className={`btn btn-sm ${completed ? "btn-warning" : "btn-success"}`} onClick={() => onToggle(index)}>
+        {completed ? "Отменить" : "Выполнено"}
+      </button>
+    </div>
+  );
+};
+
+const TaskList = ({ count, onToggle }: { count: number; onToggle: (index: number) => void }) => {
+  if (count === 0) {
+    return <p className="text-center text-gray-400">Задач пока нет. Добавьте первую!</p>;
+  }
+
+  return (
+    <div>
+      {Array.from({ length: count }, (_, i) => (
+        <TaskItem key={i} index={i} onToggle={onToggle} />
+      ))}
+    </div>
   );
 };
 
